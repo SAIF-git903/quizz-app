@@ -51,6 +51,6 @@ This application uses the Open Trivia Database API to fetch quiz questions. You 
 This project is licensed under the MIT License. See the LICENSE file for details.
 
 ## Acknowledgments
-Open Trivia Database for providing the quiz questions.
-TailwindCSS for providing an amazing utility-first CSS framework.
-React-Hot-Toast for the toast notifications.
+- Open Trivia Database for providing the quiz questions.
+- TailwindCSS for providing an amazing utility-first CSS framework.
+- React-Hot-Toast for the toast notifications.
