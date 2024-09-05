@@ -1,20 +1,17 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
 import { useSearchParams } from "react-router-dom";
-import toast, { Toaster } from "react-hot-toast"; // Import react-hot-toast
-import { CheckIcon, XMarkIcon } from "@heroicons/react/24/outline"; // Import icons
+import toast, { Toaster } from "react-hot-toast";
+import { CheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 const shuffleArray = (array) => {
   let currentIndex = array.length,
     randomIndex;
 
-  // While there remain elements to shuffle...
   while (currentIndex !== 0) {
-    // Pick a remaining element...
     randomIndex = Math.floor(Math.random() * currentIndex);
     currentIndex--;
 
-    // And swap it with the current element.
     [array[currentIndex], array[randomIndex]] = [
       array[randomIndex],
       array[currentIndex],
@@ -26,19 +23,36 @@ const shuffleArray = (array) => {
 
 const Quiz = () => {
   const [questions, setQuestions] = useState([]);
-  const [loading, setLoading] = useState(true); // Add loading state
+  const [loading, setLoading] = useState(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [score, setScore] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
-  const [showAnswer, setShowAnswer] = useState(false);
-  const [isAnswerCorrect, setIsAnswerCorrect] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [searchParams] = useSearchParams();
 
   const category = searchParams.get("category");
 
+  const getAnsweredQuestions = () => {
+    const storedQuestions = localStorage.getItem("answeredQuestions");
+    return storedQuestions ? JSON.parse(storedQuestions) : [];
+  };
+
+  const saveQuestionId = (questionId) => {
+    const answeredQuestions = getAnsweredQuestions();
+    answeredQuestions.push(questionId);
+    localStorage.setItem(
+      "answeredQuestions",
+      JSON.stringify(answeredQuestions)
+    );
+  };
+
+  const clearAnsweredQuestions = () => {
+    localStorage.removeItem("answeredQuestions");
+  };
+
   useEffect(() => {
     if (category) {
-      setShowAnswer(false);
+      setLoading(true);
       axios
         .get(
           `https://opentdb.com/api.php?amount=10&category=${
@@ -46,25 +60,35 @@ const Quiz = () => {
           }&difficulty=easy&type=multiple`
         )
         .then((response) => {
-          // Shuffle the options for each question
-          const questionsWithShuffledOptions = response.data.results.map(
-            (question) => {
-              const options = [
-                ...question.incorrect_answers,
-                question.correct_answer,
-              ];
-              return {
-                ...question,
-                options: shuffleArray(options),
-              };
-            }
+          const answeredQuestions = getAnsweredQuestions();
+
+          const newQuestions = response.data.results.filter(
+            (question) => !answeredQuestions.includes(question.question)
           );
+
+          if (newQuestions.length === 0) {
+            toast.error("No new questions available.");
+            setLoading(false);
+            return;
+          }
+
+          const questionsWithShuffledOptions = newQuestions.map((question) => {
+            const options = [
+              ...question.incorrect_answers,
+              question.correct_answer,
+            ];
+            return {
+              ...question,
+              options: shuffleArray(options),
+            };
+          });
+
           setQuestions(questionsWithShuffledOptions);
-          setLoading(false); // Set loading to false once data is fetched
+          setLoading(false);
         })
         .catch((error) => {
           console.error(error);
-          setLoading(false); // Set loading to false in case of error
+          setLoading(false);
         });
     }
   }, [category]);
@@ -73,27 +97,29 @@ const Quiz = () => {
     const isCorrect = answer === questions[currentQuestionIndex].correct_answer;
     if (isCorrect) {
       setScore(score + 1);
-      setIsAnswerCorrect(true);
-      toast.success("Correct answer!"); // Show toast for correct answer
+      toast.success("Correct answer!");
     } else {
-      toast.error("Incorrect answer! Try again."); // Show toast for incorrect answer
-      setIsAnswerCorrect(false);
+      toast.error("Incorrect answer! Try again.");
     }
-    setSelectedAnswer(answer);
-    setShowAnswer(false); // Ensure the answer is not shown yet
-  };
 
-  const handleShowAnswer = () => {
-    setShowAnswer(true);
-  };
+    saveQuestionId(questions[currentQuestionIndex].question);
+    
+    // Start transition
+    setIsTransitioning(true);
 
-  const handleNextQuestion = () => {
-    if (isAnswerCorrect || showAnswer) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-      setSelectedAnswer(null);
-      setIsAnswerCorrect(false); // Reset the correctness state for the next question
-      setShowAnswer(false); // Hide the answer for the next question
-    }
+    setTimeout(() => {
+      const nextIndex = currentQuestionIndex + 1;
+
+      if (nextIndex < questions.length) {
+        setCurrentQuestionIndex(nextIndex);
+        setSelectedAnswer(null);
+      } else {
+        toast.success("You've completed all new questions!");
+      }
+      
+      // End transition
+      setIsTransitioning(false);
+    }, 1000); // 1 second delay before moving to the next question
   };
 
   if (loading) {
@@ -110,8 +136,11 @@ const Quiz = () => {
         <h2 className="text-3xl font-bold text-indigo-600">
           Your Score: {score}
         </h2>
-        <button className="mt-6 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-colors">
-          Back to Home
+        <button
+          onClick={clearAnsweredQuestions}
+          className="mt-6 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-colors"
+        >
+          Start New Quiz
         </button>
       </div>
     );
@@ -121,64 +150,47 @@ const Quiz = () => {
 
   return (
     <div className="container mx-auto p-6 h-full flex flex-col justify-center">
-      <Toaster /> {/* Add Toaster to render the toasts */}
-      <h2 className="text-2xl font-semibold mb-6 text-gray-800">
-        {question?.question}
-      </h2>
-      <div className="grid grid-cols-2 gap-4">
-        {question?.options.map((answer, index) => (
-          <button
-            key={index}
-            onClick={() => handleAnswer(answer)}
-            className={`relative px-4 py-2 border rounded-lg shadow-sm text-gray-700 transition-colors ${
-              selectedAnswer === answer
-                ? answer === question.correct_answer
-                  ? "bg-green-500 text-white border-green-600"
-                  : "bg-red-500 text-white border-red-600"
-                : "bg-gray-100 border-gray-300 hover:bg-indigo-500 hover:text-white"
-            }`}
-          >
-            {answer}
-            {showAnswer && (
-              <div
-                className={`absolute top-2 right-2 w-6 h-6 flex items-center justify-center ${
-                  answer === question.correct_answer
-                    ? "text-green-500"
-                    : answer === selectedAnswer &&
-                      answer !== question.correct_answer
-                    ? "text-red-500"
-                    : "invisible"
-                }`}
-              >
-                {answer === question.correct_answer ? (
-                  <CheckIcon className="w-5 h-5" />
-                ) : answer === selectedAnswer ? (
-                  <XMarkIcon className="w-5 h-5" />
-                ) : null}
-              </div>
-            )}
-          </button>
-        ))}
-      </div>
-      <div className="mt-6 flex justify-between">
-        <button
-          onClick={handleShowAnswer}
-          className={`px-6 py-3 border rounded-lg shadow-md font-semibold ${
-            showAnswer
-              ? "border-green-500 text-green-500"
-              : "border-gray-300 text-gray-700"
-          } transition-colors hover:bg-gray-100`}
-        >
-          Show Answer
-        </button>
-        {(isAnswerCorrect || showAnswer) && (
-          <button
-            onClick={handleNextQuestion}
-            className="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-colors"
-          >
-            Next Question
-          </button>
-        )}
+      <Toaster />
+      <div
+        className={`transition-opacity duration-1000 ${
+          isTransitioning ? "opacity-0" : "opacity-100"
+        }`}
+      >
+        <h2 className="text-2xl font-semibold mb-6 text-gray-800">
+          {question?.question}
+        </h2>
+        <div className="grid grid-cols-2 gap-4">
+          {question?.options.map((answer, index) => (
+            <button
+              key={index}
+              onClick={() => handleAnswer(answer)}
+              className={`relative px-4 py-2 border rounded-lg shadow-sm text-gray-700 transition-colors ${
+                selectedAnswer === answer
+                  ? answer === question.correct_answer
+                    ? "bg-green-500 text-white border-green-600"
+                    : "bg-red-500 text-white border-red-600"
+                  : "bg-gray-100 border-gray-300 hover:bg-indigo-500 hover:text-white"
+              }`}
+            >
+              {answer}
+              {selectedAnswer === answer && (
+                <div
+                  className={`absolute top-2 right-2 w-6 h-6 flex items-center justify-center ${
+                    answer === question.correct_answer
+                      ? "text-green-500"
+                      : "text-red-500"
+                  }`}
+                >
+                  {answer === question.correct_answer ? (
+                    <CheckIcon className="w-5 h-5" />
+                  ) : (
+                    <XMarkIcon className="w-5 h-5" />
+                  )}
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
