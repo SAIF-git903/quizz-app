@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import { useSearchParams } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast";
-import { CheckIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { CheckIcon, XMarkIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
 
 const shuffleArray = (array) => {
   let currentIndex = array.length,
@@ -28,6 +28,7 @@ const Quiz = () => {
   const [score, setScore] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  const [answers, setAnswers] = useState([]); // To store answers and their correctness
   const [searchParams] = useSearchParams();
 
   const category = searchParams.get("category");
@@ -48,6 +49,10 @@ const Quiz = () => {
 
   const clearAnsweredQuestions = () => {
     localStorage.removeItem("answeredQuestions");
+    setQuestions([]);
+    setScore(0);
+    setAnswers([]);
+    setCurrentQuestionIndex(0);
   };
 
   useEffect(() => {
@@ -94,7 +99,14 @@ const Quiz = () => {
   }, [category]);
 
   const handleAnswer = (answer) => {
-    const isCorrect = answer === questions[currentQuestionIndex].correct_answer;
+    const currentQuestion = questions[currentQuestionIndex];
+    const isCorrect = answer === currentQuestion.correct_answer;
+
+    setAnswers([
+      ...answers,
+      { question: currentQuestion.question, isCorrect: isCorrect },
+    ]);
+
     if (isCorrect) {
       setScore(score + 1);
       toast.success("Correct answer!");
@@ -102,8 +114,8 @@ const Quiz = () => {
       toast.error("Incorrect answer! Try again.");
     }
 
-    saveQuestionId(questions[currentQuestionIndex].question);
-    
+    saveQuestionId(currentQuestion.question);
+
     // Start transition
     setIsTransitioning(true);
 
@@ -116,7 +128,7 @@ const Quiz = () => {
       } else {
         toast.success("You've completed all new questions!");
       }
-      
+
       // End transition
       setIsTransitioning(false);
     }, 1000); // 1 second delay before moving to the next question
@@ -130,17 +142,32 @@ const Quiz = () => {
     );
   }
 
-  if (currentQuestionIndex >= questions.length) {
+  console.log(currentQuestionIndex, "currentQuestionIndex");
+  
+  if (currentQuestionIndex + 1 >= questions.length) {
     return (
       <div className="text-center p-8 bg-white shadow-lg rounded-lg">
-        <h2 className="text-3xl font-bold text-indigo-600">
-          Your Score: {score}
+        <h2 className="text-3xl font-bold text-indigo-600 mb-6">
+          Your Score: {score} / {questions.length}
         </h2>
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          {answers.map((answer, index) => (
+            <div
+              key={index}
+              className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
+                answer.isCorrect ? "bg-green-500" : "bg-red-500"
+              }`}
+            >
+              {index + 1}
+            </div>
+          ))}
+        </div>
         <button
           onClick={clearAnsweredQuestions}
-          className="mt-6 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-colors"
+          className="mt-6 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center justify-center"
         >
-          Start New Quiz
+          <ArrowPathIcon className="w-6 h-6 mr-2" />
+          Refresh Quiz
         </button>
       </div>
     );
