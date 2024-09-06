@@ -15,7 +15,9 @@ const HomePage = () => {
   };
 
   const handleDifficultySelection = (difficulty) => {
-    navigate(`/quiz?category=${category}`, { state: { category, difficulty } });
+    navigate(`/quiz?category=${category}&difficulty=${difficulty}`, {
+      state: { category, difficulty },
+    });
   };
 
   const handleBack = () => {

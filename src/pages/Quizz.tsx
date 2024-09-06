@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
 import axios from "axios";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import toast, { Toaster } from "react-hot-toast";
-import { CheckIcon, XMarkIcon, ArrowPathIcon } from "@heroicons/react/24/outline";
+import {
+  CheckIcon,
+  XMarkIcon,
+  ArrowPathIcon,
+  CogIcon,
+} from "@heroicons/react/24/outline";
 
 const shuffleArray = (array) => {
   let currentIndex = array.length,
@@ -11,7 +16,6 @@ const shuffleArray = (array) => {
   while (currentIndex !== 0) {
     randomIndex = Math.floor(Math.random() * currentIndex);
     currentIndex--;
-
     [array[currentIndex], array[randomIndex]] = [
       array[randomIndex],
       array[currentIndex],
@@ -28,10 +32,12 @@ const Quiz = () => {
   const [score, setScore] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [isTransitioning, setIsTransitioning] = useState(false);
-  const [answers, setAnswers] = useState([]); // To store answers and their correctness
+  const [answers, setAnswers] = useState([]); // Track answers with correctness
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
 
   const category = searchParams.get("category");
+  const difficulty = searchParams.get("difficulty");
 
   const getAnsweredQuestions = () => {
     const storedQuestions = localStorage.getItem("answeredQuestions");
@@ -48,25 +54,22 @@ const Quiz = () => {
   };
 
   const clearAnsweredQuestions = () => {
-    localStorage.removeItem("answeredQuestions");
     setQuestions([]);
     setScore(0);
     setAnswers([]);
     setCurrentQuestionIndex(0);
+    fetchQuestions();
   };
 
-  useEffect(() => {
+  const fetchQuestions = () => {
     if (category) {
       setLoading(true);
       axios
         .get(
-          `https://opentdb.com/api.php?amount=10&category=${
-            category ?? 9
-          }&difficulty=easy&type=multiple`
+          `https://opentdb.com/api.php?amount=10&category=${category}&difficulty=${difficulty}&type=multiple`
         )
         .then((response) => {
           const answeredQuestions = getAnsweredQuestions();
-
           const newQuestions = response.data.results.filter(
             (question) => !answeredQuestions.includes(question.question)
           );
@@ -77,16 +80,18 @@ const Quiz = () => {
             return;
           }
 
-          const questionsWithShuffledOptions = newQuestions.map((question) => {
-            const options = [
-              ...question.incorrect_answers,
-              question.correct_answer,
-            ];
-            return {
-              ...question,
-              options: shuffleArray(options),
-            };
-          });
+          const questionsWithShuffledOptions = newQuestions
+            .slice(0, 10)
+            .map((question) => {
+              const options = [
+                ...question.incorrect_answers,
+                question.correct_answer,
+              ];
+              return {
+                ...question,
+                options: shuffleArray(options),
+              };
+            });
 
           setQuestions(questionsWithShuffledOptions);
           setLoading(false);
@@ -96,6 +101,10 @@ const Quiz = () => {
           setLoading(false);
         });
     }
+  };
+
+  useEffect(() => {
+    fetchQuestions();
   }, [category]);
 
   const handleAnswer = (answer) => {
@@ -116,7 +125,6 @@ const Quiz = () => {
 
     saveQuestionId(currentQuestion.question);
 
-    // Start transition
     setIsTransitioning(true);
 
     setTimeout(() => {
@@ -126,12 +134,11 @@ const Quiz = () => {
         setCurrentQuestionIndex(nextIndex);
         setSelectedAnswer(null);
       } else {
-        toast.success("You've completed all new questions!");
+        toast.success("You've completed the quiz!");
       }
 
-      // End transition
       setIsTransitioning(false);
-    }, 1000); // 1 second delay before moving to the next question
+    }, 1000);
   };
 
   if (loading) {
@@ -142,33 +149,57 @@ const Quiz = () => {
     );
   }
 
-  console.log(currentQuestionIndex, "currentQuestionIndex");
-  
+  if (questions.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen">
+        <h2 className="text-3xl font-bold text-gray-700 mb-4">
+          No more questions left!
+        </h2>
+        <div className="flex gap-2">
+          <button
+            onClick={() => navigate("/")}
+            className="p-3 rounded-full shadow-md transition-all flex items-center justify-center hover:rotate-90 hover:text-gray-500 hover:shadow-lg"
+          >
+            <CogIcon className="w-8 h-8 text-gray-600 transition-all" />
+          </button>
+          <button
+            onClick={clearAnsweredQuestions}
+            className="bg-indigo-500 text-white py-2 px-4 rounded-lg hover:bg-indigo-700"
+          >
+            Refresh Questions
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (currentQuestionIndex + 1 >= questions.length) {
     return (
-      <div className="text-center p-8 bg-white shadow-lg rounded-lg">
-        <h2 className="text-3xl font-bold text-indigo-600 mb-6">
-          Your Score: {score} / {questions.length}
-        </h2>
-        <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className="flex flex-col items-center justify-center h-[100vh] text-center p-8 bg-white shadow-lg rounded-lg">
+        <div className="grid grid-cols-10 gap-2 mb-6 border border-sky-500 p-2">
           {answers.map((answer, index) => (
             <div
               key={index}
-              className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
+              className={`w-6 h-6 rounded-sm flex items-center justify-center text-white font-semibold ${
                 answer.isCorrect ? "bg-green-500" : "bg-red-500"
               }`}
-            >
-              {index + 1}
-            </div>
+            />
           ))}
         </div>
-        <button
-          onClick={clearAnsweredQuestions}
-          className="mt-6 px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 transition-colors flex items-center justify-center"
-        >
-          <ArrowPathIcon className="w-6 h-6 mr-2" />
-          Refresh Quiz
-        </button>
+        <div className="flex space-x-4">
+          <button
+            onClick={clearAnsweredQuestions}
+            className="p-3 rounded-full shadow-md transition-all flex items-center justify-center hover:shadow-lg active:animate-spin"
+          >
+            <ArrowPathIcon className="w-8 h-8 text-gray-600 hover:text-gray-800 transition-all" />
+          </button>
+          <button
+            onClick={() => navigate("/")}
+            className="p-3 rounded-full shadow-md transition-all flex items-center justify-center hover:rotate-90 hover:text-gray-500 hover:shadow-lg"
+          >
+            <CogIcon className="w-8 h-8 text-gray-600 transition-all" />
+          </button>
+        </div>
       </div>
     );
   }
