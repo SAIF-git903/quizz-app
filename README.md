@@ -25,7 +25,7 @@ This is a Quiz Application built with React, using TailwindCSS for styling and a
 1. **Clone the repository:**
 
 ```bash
-git clone https://github.com/yourusername/quiz-app.git
+git clone https://github.com/SAIF-git903/quizz-app.git
 cd quiz-app
 ```
 2. **Install Dependencies:**
